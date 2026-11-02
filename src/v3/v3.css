@@ -1,0 +1,51 @@
+/* Footer section: our read-only header; its children are native blocks. */
+.ofn-v3-section-header { display: flex; align-items: center; gap: var(--orca-spacing-xs, 4px); min-inline-size: 0; user-select: none; }
+.ofn-v3-section-title { font-weight: 600; flex: 1 1 auto; min-inline-size: 0; }
+.ofn-v3-section-rule { flex: 1 1 auto; block-size: 0; border-block-start: var(--orca-border-general, 1px solid currentColor); opacity: .35; }
+.ofn-v3-section-tools { display: inline-flex; align-items: center; gap: 2px; flex: none; opacity: .6; transition: opacity .12s; }
+.ofn-v3-section:hover .ofn-v3-section-tools, .ofn-v3-section-tools:focus-within { opacity: 1; }
+@media (hover: none) { .ofn-v3-section-tools { opacity: 1; } }
+/* Entries carry the footnote tag; inside the footer its pill is noise. */
+/* The #尾注 tag of a footer row is hidden as a zero-size inline box that
+   stays in the line: with display:none Orca loses the caret when a character
+   is deleted; taken out of the line (absolute, or only invisible), an emptied
+   row has nowhere for the caret and it slips into the row above. */
+.orca-repr.ofn-v3-section-footer > .orca-repr-children .orca-tags { display: inline-block; width: 0; height: 0; padding: 0; margin: 0; border: 0; overflow: hidden; opacity: 0; vertical-align: baseline; }
+/* [n] is drawn through Orca's own handle text (data-icon). Mirror rows carry
+   the icon font's glyph rule as well, so state ours explicitly for our rows. */
+.orca-repr.ofn-v3-section-footer > .orca-repr-children > .orca-block > .orca-repr > .orca-repr-main > .orca-repr-main-none-editable > .orca-block-handle[data-icon] { white-space: nowrap; inline-size: auto; min-inline-size: 1rem; text-align: end; transform: translateX(calc(1rem - 100%)); }
+.orca-repr.ofn-v3-section-footer > .orca-repr-children > .orca-block > .orca-repr > .orca-repr-main > .orca-repr-main-none-editable > .orca-block-handle[data-icon]::before { content: attr(data-icon) !important; font-family: var(--orca-fontfamily-ui, sans-serif) !important; font-style: normal; font-size: var(--orca-fontsize-xs); }
+/* Inline footnote input: candidates below the caret. */
+.ofn-v3-input { min-inline-size: 16rem; max-inline-size: min(28rem, calc(100vw - 24px)); max-block-size: 18rem; overflow: auto; padding: 4px; }
+.ofn-v3-input .orca-menu-text-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* A sub-block's own footer, while one of its ancestors is the viewed root. */
+.orca-block[data-ofn-foreign="true"] { display: none !important; }
+/* Directory: quiet list on the host popup surface. */
+.ofn-v3-dir { display: flex; flex-direction: column; inline-size: min(17rem, calc(100vw - 24px)); max-block-size: min(60vh, calc(100vh - 96px)); padding: 4px 0 !important; font-size: var(--orca-fontsize-sm, 13px); line-height: 1.5; overflow: hidden; }
+.ofn-v3-dir-head { flex: none; display: flex; align-items: center; gap: 2px; min-block-size: 24px; padding: 0 4px 2px 12px; color: var(--orca-color-text-2, inherit); font-size: var(--orca-fontsize-xs, 12px); cursor: grab; user-select: none; touch-action: none; }
+.ofn-v3-dir-head[data-locked="true"] { cursor: default; }
+.ofn-v3-dir-title { flex: 1 1 auto; min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ofn-v3-dir-tools { display: inline-flex; align-items: center; opacity: 0; transition: opacity .12s; }
+.ofn-v3-dir:hover .ofn-v3-dir-tools, .ofn-v3-dir-tools:focus-within { opacity: 1; }
+.ofn-v3-tool { padding: 2px 4px !important; min-inline-size: 0 !important; line-height: 1; }
+.ofn-v3-dir-list { flex: 1 1 auto; min-block-size: 0; list-style: none; margin: 0; padding: 0 4px; overflow: auto; overscroll-behavior: contain; }
+.ofn-v3-dir-row { display: flex; align-items: center; border-radius: var(--orca-radius-sm, 4px); }
+.ofn-v3-dir-row:hover, .ofn-v3-dir-row.is-selected { background-color: color-mix(in srgb, currentColor 7%, transparent); }
+.ofn-v3-dir-item { flex: 1 1 auto; min-inline-size: 0; display: flex; align-items: baseline; gap: 8px; padding: 2px 4px 2px 8px; border: 0; background: none; color: inherit; font: inherit; text-align: start; cursor: pointer; }
+.ofn-v3-dir-num { flex: none; min-inline-size: 1.1em; text-align: end; color: var(--orca-color-text-2, inherit); opacity: .75; font-variant-numeric: tabular-nums; font-size: .92em; }
+.ofn-v3-dir-text { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ofn-v3-dir-more { flex: none; opacity: 0; }
+.ofn-v3-dir-row:hover .ofn-v3-dir-more, .ofn-v3-dir-row:focus-within .ofn-v3-dir-more { opacity: 1; }
+@media (hover: none) { .ofn-v3-dir-tools, .ofn-v3-dir-more { opacity: 1; } }
+.ofn-v3-dir-empty { padding: 4px 12px 6px; color: var(--orca-color-text-2, inherit); font-size: var(--orca-fontsize-xs, 12px); }
+/* Footer rows: Orca's reference-count badge counts our mirrors too; the [n]
+   handle already leads back to the citations. */
+.orca-repr.ofn-v3-section-footer > .orca-repr-children > .orca-block > .orca-repr > .orca-repr-main > .orca-repr-main-none-editable > .orca-block-ref-count-marker { display: none; }
+/* Location list: same quiet header as the directory. */
+.ofn-next-locations > .ofn-next-header { padding: 0 4px 2px 12px; color: var(--orca-color-text-2, inherit); font-size: var(--orca-fontsize-xs, 12px); }
+.ofn-next-locations > .ofn-next-header > span { flex: 1 1 auto; }
+/* A footnote not cited in this range: [·], lighter than the numbers. */
+.orca-repr.ofn-v3-section-footer > .orca-repr-children > .orca-block > .orca-repr > .orca-repr-main > .orca-repr-main-none-editable > .orca-block-handle[data-icon="[·]"]::before { opacity: .55; }
+.ofn-v3-section-note { margin-inline-start: 8px; color: var(--orca-color-text-2, inherit); font-size: var(--orca-fontsize-xs, 12px); }
+/* The delete box keeps Orca's ConfirmBox look; only its width is bounded. */
+.ofn-v3-confirm { max-inline-size: min(26rem, calc(100vw - 24px)); }

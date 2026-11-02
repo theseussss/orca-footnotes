@@ -1,0 +1,33 @@
+/* Number projection only: the original native r renderer remains registered.
+   Native .sup supplies superscript typography. No global text/reference styles. */
+/* The marker's own font size, fixed where it is declared (a registered length
+   resolves 1em there), so the number inside a font-size:0 box keeps it. */
+@property --ofn-mark-size { syntax: "<length>"; inherits: true; initial-value: 0px; }
+.orca-inline.ofn-vnext-note[data-ofn-active="true"] { --ofn-mark-size: 1em; }
+.orca-inline.ofn-vnext-note[data-ofn-active="true"] > :not(.orca-inline-r-content) { display: none; }
+.orca-inline.ofn-vnext-note[data-ofn-active="true"] > .orca-inline-r-content { font-size: 0; text-decoration: none; }
+.orca-inline.ofn-vnext-note[data-ofn-active="true"] > .orca-inline-r-content > * { display: none; }
+.orca-inline.ofn-vnext-note[data-ofn-active="true"] > .orca-inline-r-content::after {
+  content: attr(data-ofn-number);
+  font-size: var(--ofn-mark-size);
+  font-weight: normal;
+  text-decoration: none;
+}
+/* Hover and a short navigation lease are separate. Neither moves prose. */
+.orca-inline.ofn-vnext-note[data-ofn-active="true"].ofn-next-highlight,
+.orca-inline.ofn-vnext-note[data-ofn-active="true"].ofn-next-navigation-highlight {
+  color: var(--orca-color-primary-5, inherit);
+  border-radius: .15em;
+  background-color: color-mix(in srgb, var(--orca-color-primary-5, currentColor) 12%, transparent);
+}
+/* Only the actual footer target row, not its body's superscripts. No extra
+   padding/margin/layout space is borrowed to force centering. */
+[data-ofn-flow-host] .ofn-next-footer-row { transition: background-color .18s ease-out; }
+[data-ofn-flow-host] .ofn-next-footer-highlight,
+.orca-block-editor .orca-block[data-id][data-mirror-id].ofn-next-footer-highlight {
+  border-radius: .2em;
+  background-color: color-mix(in srgb, var(--orca-color-primary-5, currentColor) 10%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-ofn-flow-host] .ofn-next-footer-row { transition: none; }
+}
