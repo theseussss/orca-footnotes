@@ -62,7 +62,9 @@ export class NativeMarkerNumbers {
     const touched = new Set<HTMLElement>();
     let count = 0;
     for (const outer of this.editor.querySelectorAll<HTMLElement>(`.orca-inline[data-type="r"].${NATIVE_NOTE_FORMAT}`)) {
-      const body = outer.closest<HTMLElement>(".orca-block-editor-blocks[data-hl-container]");
+      // The body list of this editor (main > blocks). Orca 1.100 no longer marks
+      // it with data-hl-container, so the structure alone identifies it.
+      const body = outer.closest<HTMLElement>(".orca-block-editor-blocks");
       if (outer.closest(".orca-block-editor") !== this.editor || outer.closest(".orca-block[data-mirror-id]") || outer.closest(NATIVE_PREVIEW_CONTEXT)
         || body?.parentElement?.parentElement !== this.editor || !body.parentElement.classList.contains("orca-block-editor-main")) continue;
       const inner = outer.querySelector<HTMLElement>(":scope > .orca-inline-r-content");

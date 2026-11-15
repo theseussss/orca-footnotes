@@ -9,9 +9,13 @@ import { createWorkspaceUI, type MarkerMenuActions } from "../vnext/workspace";
 import type { AnnotationRecord, ScopePreferences } from "../vnext/types";
 import { DEFAULT_PREFERENCES } from "../vnext/types";
 import type { LocationView, WorkspaceActions, WorkspaceItem, WorkspaceView } from "../vnext/ui-contract";
-import { NOTE_FORMAT, OWNER_PROPERTY, REF_INLINE, entryText, hasTag, isBlank, isMirror, isNoteFragment, mirroredId, noteReferences, ownerOf, sectionKind, stateMarker, stateOf, type StateMarker } from "./model";
+import { JOURNAL_QUERIES, JOURNAL_QUERY_ORDER, NOTE_FORMAT, OWNER_PROPERTY, REF_INLINE, entryText, hasTag, isBlank, isJournal, isMirror, isNoteFragment, mirroredId, noteReferences, ownerOf, property, sectionKind, stateMarker, stateOf, tabEntry, withoutTab, type StateMarker } from "./model";
+import { FooterTabs } from "./tabs";
+/** Orca's commands that bring 引用 / 同标签 / 候选引用 to the front. */
+const ORCA_TAB_COMMANDS = ["core.editor.goToReferrers", "core.editor.goToSameKind", "core.editor.goToCandidates"];
 import { FootnoteStore, type PanelEditor } from "./store";
 import { createDeleteConfirm, createDirectoryUI, createInputPopup, type InputOption } from "./ui";
+import { createDrawerDirectoryUI, type DrawerAnchor } from "./drawer";
 
 type UiRoot = { render(value: import("react").ReactNode): void; unmount(): void };
 type Pane = {
@@ -47,6 +51,7 @@ export class FootnoteController {
   private readonly ui: ReturnType<typeof createWorkspaceUI>;
   private readonly InputPopup: ReturnType<typeof createInputPopup>;
   private readonly directory: ReturnType<typeof createDirectoryUI>;
+  private readonly drawer: ReturnType<typeof createDrawerDirectoryUI>;
   private readonly DeleteConfirm: ReturnType<typeof createDeleteConfirm>;
   private readonly Float: ReturnType<typeof createFloatingSurface>;
   private panes = new Map<string, Pane>();
@@ -92,6 +97,7 @@ export class FootnoteController {
     this.ui = createWorkspaceUI(this.React, api.components);
     this.InputPopup = createInputPopup(this.React, api.components);
     this.directory = createDirectoryUI(this.React, api.components);
+    this.drawer = createDrawerDirectoryUI(this.React, api.components);
     this.DeleteConfirm = createDeleteConfirm(this.React, api.components);
     this.Float = createFloatingSurface(this.React);
     this.actions = this.makeActions();
@@ -108,6 +114,7 @@ export class FootnoteController {
   readonly getSnapshot = (): WorkspaceView => this.state;
   readonly subscribe = (listener: () => void): (() => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
   private emit(patch: Partial<WorkspaceView> = {}): void {
+    this.notifyAnchor();
     if (!this.active) return;
     this.state = { ...this.state, ...patch, directoryLayout: this.directoryLayout, footerDisplayed: true, loading: this.busy > 0 || this.switching,
       deletion: this.deletion, notice: this.notice };
@@ -145,6 +152,10 @@ export class FootnoteController {
     try { const raw = await this.api.plugins.getData(this.pluginName, this.rootsKey()); const parsed = typeof raw === "string" ? JSON.parse(raw) : [];
       this.roots = Array.isArray(parsed) ? parsed.filter(Number.isSafeInteger) : []; } catch { this.roots = []; }
     this.navigatorOpen = this.preferences().navigatorVisible !== false;
+    void this.dropLegacyJournalTab().catch(error => console.warn("[footnotes] legacy journal tab", error));
+    for (const id of ORCA_TAB_COMMANDS) this.api.commands.registerAfterCommand(id, this.onOrcaTabCommand);
+    document.addEventListener("click", this.onSideTool, true);
+    document.addEventListener("scroll", this.notifyAnchor, true);
     // Recount when the data changes: right away after switching pages, and
     // once typing pauses while editing (not on every keystroke).
     this.unsubscribe = this.subscribeState(this.api.state, ops => {
@@ -170,6 +181,11 @@ export class FootnoteController {
   async stop(): Promise<void> {
     if (!this.active) return;
     this.api.commands.unregisterBeforeCommand("core.editor.deleteBlocks", this.beforeDelete);
+    for (const id of ORCA_TAB_COMMANDS) this.api.commands.unregisterAfterCommand(id, this.onOrcaTabCommand);
+    document.removeEventListener("click", this.onSideTool, true);
+    document.removeEventListener("scroll", this.notifyAnchor, true);
+    if (this.anchorFrame) cancelAnimationFrame(this.anchorFrame);
+    this.tabs.dropAll();
     for (const type of this.events) document.removeEventListener(type, this.onEvent, true);
     document.removeEventListener("keydown", this.onInputKey, true);
     document.removeEventListener("selectionchange", this.onSelection);
@@ -269,6 +285,7 @@ export class FootnoteController {
     // Keep each footer in number order. Writes only when something is off, and
     // only while the user is not typing in that footer or a footnote input.
     for (const pane of next.values()) if (this.needsTidy(pane)) this.scheduleTidy(pane.key);
+    this.dropLegacyTabs();
     void this.adoptStray().catch(error => console.warn("[footnotes] adopt", error));
   }
   private tidyTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -334,14 +351,20 @@ export class FootnoteController {
   // ---------------- decoration ----------------
   private sectionRows(pane: Pane): HTMLElement[] {
     if (!pane.section) return [];
-    const section = [...pane.editor.querySelectorAll<HTMLElement>(`.orca-block[data-id="${pane.section.id}"]`)].find(node => !node.closest(".orca-popup,.orca-block-preview"));
+    // In tab mode the footer is drawn in the 尾注 tab; the body keeps only an empty shell.
+    const drawn = [...pane.editor.querySelectorAll<HTMLElement>(`.orca-block[data-id="${pane.section.id}"]`)].filter(node => !node.closest(".orca-popup,.orca-block-preview"));
+    const section = drawn.find(node => node.closest(".ofn-v3-tab")) ?? drawn[0];
     return section ? [...section.querySelectorAll<HTMLElement>(":scope > .orca-repr > .orca-repr-children > .orca-block[data-id]")] : [];
   }
   private rowEntryId(row: HTMLElement): DbId { return Number(row.dataset.mirrorId ?? row.dataset.id); }
   private decorate(): void {
+    this.syncTabs();
     for (const pane of this.panes.values()) {
       if (!pane.editor.isConnected) continue;
       // One footer per view: a sub-block's own footer is hidden while an ancestor is viewed.
+      // The view's own footer is never foreign; an empty body shell (tab mode) may still carry
+      // the mark from the moment it was created, before this pane knew its footer.
+      if (pane.section) for (const own of pane.editor.querySelectorAll<HTMLElement>(`.orca-block[data-ofn-foreign][data-id="${pane.section.id}"]`)) delete own.dataset.ofnForeign;
       for (const repr of pane.editor.querySelectorAll<HTMLElement>(".orca-repr.ofn-v3-section-footer")) {
         const block = repr.closest<HTMLElement>(".orca-block[data-id]"); if (!block) continue;
         const foreign = block.dataset.id !== String(pane.section?.id) && !block.closest(".orca-popup,.orca-block-preview");
@@ -379,8 +402,9 @@ export class FootnoteController {
   // ---------------- navigation ----------------
   private footerRow(pane: Pane, entryId: DbId): HTMLElement | undefined { return this.sectionRows(pane).find(row => this.rowEntryId(row) === entryId); }
   private async jumpFooter(entryId: DbId, pane = this.pane()): Promise<void> {
+    await this.showTab(pane);
     let row = this.footerRow(pane, entryId);
-    if (!row) { await this.reconcile(pane.key); await this.refresh(); pane = this.pane(pane.key); row = this.footerRow(pane, entryId); }
+    if (!row) { await this.reconcile(pane.key); await this.refresh(); pane = this.pane(pane.key); await this.showTab(pane); row = this.footerRow(pane, entryId); }
     if (!row) throw new Error("文末尾注区里还没有这一条。");
     scrollMountedNativeFooter(pane.editor, row) || row.scrollIntoView({ block: "center" });
     this.feedback.show([row], "ofn-next-footer-highlight", pane.key);
@@ -574,6 +598,73 @@ export class FootnoteController {
     const existing = this.store.sectionOf(page); if (existing) return existing;
     const id = await this.store.createSection(editor, page, this.preferences().title);
     return this.store.live(id) ?? (await this.store.block(id))!;
+  }
+  // ---------------- the footer as a tab under the page ----------------
+  placement(): "tab" | "body" { return this.setting("footerPlacement") === "body" ? "body" : "tab"; }
+  /** 1-based place of the 尾注 tab among the bottom tabs; 0 = last. */
+  tabPosition(): number { const raw = Number(this.setting("tabPosition") ?? 1); return Number.isFinite(raw) && raw >= 0 ? Math.floor(raw) : 1; }
+  private tabs = new FooterTabs({
+    label: () => String(this.setting("footerTitle") ?? "").trim() || "尾注",
+    position: () => this.tabPosition(),
+    setPosition: position => { void this.setSettings({ tabPosition: position }).catch(error => this.report(error)); },
+    emptyText: rootId => { const root = this.store.live(rootId); return isJournal(root) ? "这一天没有尾注" : root?.parent != null ? "这里没有尾注" : "本页无尾注"; },
+  });
+  /** Where the footer of the editor's view root is drawn when it lives in the 尾注 tab; undefined when the
+   * footer stays in the body (setting, an editor without bottom tabs such as a preview, exporting). */
+  tabMount(editor: HTMLElement | null | undefined): HTMLElement | undefined {
+    if (!editor || this.placement() !== "tab" || document.documentElement.classList.contains("orca-exporting")) return;
+    const root = Number(editor.dataset.blockId); if (!Number.isSafeInteger(root)) return;
+    return this.tabs.ensure(editor, root)?.mount;
+  }
+  /** Draw/repair the 尾注 tab in every visible editor and show what it holds. */
+  private syncTabs(): void {
+    this.tabs.prune();
+    if (this.placement() !== "tab") { this.tabs.dropAll(); return; }
+    for (const { editor, panelId, rootId } of this.visibleEditors()) {
+      if (!this.tabs.ensure(editor, rootId)) continue;
+      const pane = this.panes.get(keyOf(panelId, rootId));
+      this.tabs.status(editor, !pane ? "loading" : pane.section ? "footer" : "empty");
+    }
+  }
+  /** Orca's side buttons and shortcuts for 引用/同标签/候选引用 choose an Orca tab even when Orca does not redraw. */
+  private onOrcaTabCommand = () => { this.tabs.orcaChose(); };
+  private onSideTool = (event: Event) => {
+    const button = (event.target as Element | null)?.closest?.(".orca-block-editor-sidetools-btn");
+    if (button?.querySelector(".ti-arrow-down-right, .ti-tags, .ti-arrow-right-dashed")) this.tabs.orcaChose();
+  };
+  // 0.7.0-dev kept the tab as an Orca custom query in each page's `_queries` (journals: shared settings).
+  // That is gone; such entries are taken off when their page is seen (not part of undo).
+  get tabViewId(): string { return `${this.pluginName}.footer`; }
+  private legacyTried = new Set<DbId>();
+  private dropLegacyTabs(): void {
+    for (const pane of this.panes.values()) {
+      const root = this.store.live(pane.rootId); if (!root || this.legacyTried.has(root.id) || isJournal(root)) continue;
+      const queries = property(root, "_queries"); if (!tabEntry(queries, this.tabViewId)) continue;
+      this.legacyTried.add(root.id);
+      const next = withoutTab(JSON.parse(JSON.stringify(queries)), JSON.parse(JSON.stringify(property(root, "_queryOrder") ?? null)), this.tabViewId), ed = this.store.editor(pane.panelId);
+      // Orca redraws its tabs without the old one and chooses its first; the page has just opened, so ours stays the default.
+      this.tabs.expectRedraw(pane.editor);
+      void this.run(() => ed.invokeGroup(() => ed.invokeCommand("core.editor.setProperties", null, [root.id], [
+        { name: "_queries", type: 0, value: next.queries.length ? next.queries : null }, { name: "_queryOrder", type: 0, value: next.order.length ? next.order : null }]), { topGroup: true, undoable: false }))
+        .catch(error => console.warn("[footnotes] legacy tab", error));
+    }
+  }
+  private async dropLegacyJournalTab(): Promise<void> {
+    const settings = this.api.state.settings as Record<number, unknown> | undefined;
+    if (!tabEntry(settings?.[JOURNAL_QUERIES], this.tabViewId)) return;
+    const next = withoutTab(JSON.parse(JSON.stringify(settings?.[JOURNAL_QUERIES])), JSON.parse(JSON.stringify(settings?.[JOURNAL_QUERY_ORDER] ?? null)), this.tabViewId);
+    for (const [key, value] of [[JOURNAL_QUERIES, next.queries], [JOURNAL_QUERY_ORDER, next.order]] as const) {
+      (this.api.state.settings as Record<number, unknown>)[key] = value;
+      await this.api.invokeBackend("set-config", key, JSON.stringify(value));
+      this.api.broadcasts.broadcast("orca.refresh-settings", key);
+    }
+  }
+  /** Bring the view's 尾注 tab to the front and wait until the footer is drawn in it. */
+  private async showTab(pane: Pane): Promise<void> {
+    if (this.placement() !== "tab" || !this.tabMount(pane.editor)) return;
+    this.tabs.activate(pane.editor, true);
+    const section = pane.section?.id; if (section == null) return;
+    for (let i = 0; i < 30 && !pane.editor.querySelector(`.ofn-v3-tab .orca-block[data-id="${section}"]`); i++) await new Promise(resolve => setTimeout(resolve, 50));
   }
   /** Delete = remove all its citations + move it to the recycle page. */
   /** Delete footnotes in one undoable step: citations removed, the footnotes
@@ -999,6 +1090,7 @@ export class FootnoteController {
         const section = (pane.section && this.store.live(pane.section.id)) ?? await this.ensureSection(editor, pane);
         const id = await editor.invokeCommand("core.editor.insertBlock", null, section, "lastChild", null) as DbId;
         this.overlay = undefined; await this.refresh();
+        await this.showTab(this.pane(pane.key));
         let content: HTMLElement | null = null;
         for (let i = 0; i < 20 && !content; i++) { content = this.pane(pane.key).editor.querySelector<HTMLElement>(`.orca-block[data-id="${id}"] > .orca-repr > .orca-repr-main > .orca-repr-main-content`); if (!content) await new Promise(resolve => setTimeout(resolve, 50)); }
         if (!content) throw new Error("新的一行没有出现，请再试一次。");
@@ -1047,6 +1139,44 @@ export class FootnoteController {
   private async setSettings(patch: Record<string, unknown>): Promise<void> {
     const settings = { ...this.api.state.plugins[this.pluginName]?.settings, ...patch };
     await this.api.plugins.setSettings("repo", this.pluginName, settings); await this.refresh();
+  }
+  /** 细线抽屉 (default) sits on the editor's right edge; 列表 is the floating list. An old "rail" value means the drawer. */
+  private directoryStyle(): "drawer" | "list" { return this.setting("directoryStyle") === "list" ? "list" : "drawer"; }
+  // ---------- the drawer's anchor: the active editor's right edge, and what is being read ----------
+  private anchorListeners = new Set<() => void>();
+  private anchorFrame = 0;
+  private notifyAnchor = (): void => {
+    if (this.anchorFrame || !this.anchorListeners.size) return;
+    this.anchorFrame = requestAnimationFrame(() => { this.anchorFrame = 0; for (const listener of [...this.anchorListeners]) listener(); });
+  };
+  private readonly drawerAnchor: DrawerAnchor = {
+    rect: () => {
+      const editor = this.currentKey ? this.panes.get(this.currentKey)?.editor : undefined; if (!editor?.isConnected) return null;
+      const box = editor.getBoundingClientRect(); if (box.width < 240 || box.height < 160) return null;
+      // Between the text column and Orca's side buttons.
+      const tools = editor.parentElement?.querySelector<HTMLElement>(":scope > .orca-block-editor-sidetools")?.getBoundingClientRect();
+      const right = tools && tools.width ? Math.min(box.right, tools.left) - 6 : box.right - 16;
+      // Upper right: the first line level with the first of Orca's side buttons (else near the top of the editor).
+      const top = tools && tools.height ? Math.max(tools.top, box.top) + 2 : Math.max(box.top, 0) + 32, bottom = Math.min(box.bottom, window.innerHeight) - 32;
+      return bottom > top ? new DOMRect(box.left, top, right - box.left, bottom - top) : null;
+    },
+    subscribe: listener => { this.anchorListeners.add(listener); return () => { this.anchorListeners.delete(listener); }; },
+    reading: () => this.readingWeights(),
+  };
+  /** How close each footnote's citations are to the middle of what is on screen (0..1). */
+  private readingWeights(): Map<DbId, number> {
+    const out = new Map<DbId, number>(), pane = this.currentKey ? this.panes.get(this.currentKey) : undefined;
+    if (!pane?.editor.isConnected) return out;
+    const box = pane.editor.getBoundingClientRect(), top = Math.max(box.top, 0), bottom = Math.min(box.bottom, window.innerHeight);
+    const middle = (top + bottom) / 2, half = Math.max(80, (bottom - top) / 2);
+    for (const occurrence of pane.projection.occurrences) {
+      const marker = this.markerElements(pane, occurrence); if (!marker) continue;
+      const rect = marker.getBoundingClientRect(); if (!rect.height) continue;
+      const distance = ((rect.top + rect.bottom) / 2 - middle) / half; if (Math.abs(distance) > 1.1) continue;
+      const weight = Math.exp(-2.5 * distance * distance);
+      if (weight > (out.get(occurrence.targetId) ?? 0)) out.set(occurrence.targetId, weight);
+    }
+    return out;
   }
   private setDirectoryLayout(next: DirectoryLayout): void {
     this.directoryLayout = parseDirectoryLayout(serializeDirectoryLayout(next)); this.emit();
@@ -1097,6 +1227,11 @@ export class FootnoteController {
   // ---------------- rendering ----------------
   private renderDirectory(view: WorkspaceView): import("react").ReactElement {
     const React = this.React, inset = this.setting("directoryDefaultInset");
+    if (this.directoryStyle() === "drawer") return this.navigatorOpen
+      ? <this.drawer.DrawerDirectory view={view} actions={this.actions} anchor={this.drawerAnchor}
+          mode={this.setting("drawerMode") === "slide" ? "slide" : "local"} follow={this.setting("drawerFollow") === "reading" ? "reading" : "pointer"}
+          font={this.setting("drawerFont") === "serif" ? "serif" : this.setting("drawerFont") === "sans" ? "sans" : "editor"} />
+      : <></>;
     return <this.Float directory visible={this.navigatorOpen} className="ofn-next-popup ofn-next-directory-popup"
       layout={this.directoryLayout} defaultInset={Number.isFinite(inset) ? Math.max(12, Math.min(300, inset)) : 60}
       onLayoutChange={next => { if (!this.directoryLayout.locked) this.setDirectoryLayout({ ...this.directoryLayout, position: next.position }); }}>

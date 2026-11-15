@@ -36,7 +36,8 @@ const insert = async (rootId, id, text, pick = false) => {
 const footerRows = rootId => page.evaluate(rootId => {
   const editor = [...document.querySelectorAll(".orca-block-editor[data-block-id]")].find(e => e.dataset.blockId === String(rootId) && !e.closest(".orca-hideable-hidden"));
   const own = (orca.state.blocks[rootId]?.children ?? []).find(c => orca.state.blocks[c]?.properties?.some(p => p.name === "_repr" && p.value?.type === "orca-footnotes.section"));
-  const section = own != null ? editor?.querySelector(`.orca-block[data-id="${own}"]`) : null;
+  // v0.7: the footer may be drawn in the 尾注 tab; the body then keeps an empty shell.
+  const section = own != null ? editor?.querySelector(`.ofn-v3-tab .orca-block[data-id="${own}"]`) ?? editor?.querySelector(`.orca-block[data-id="${own}"]`) : null;
   return section ? [...section.querySelectorAll(":scope > .orca-repr > .orca-repr-children > .orca-block")].map(r => ({ id: r.dataset.id, icon: r.querySelector(".orca-block-handle")?.getAttribute("data-icon") ?? null, text: (r.querySelector(".orca-repr-main-content")?.textContent ?? "").trim().slice(0, 20) })) : null;
 }, rootId);
 // The highlight lasts under a second; record every superscript that gets it.

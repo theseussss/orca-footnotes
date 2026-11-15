@@ -63,3 +63,20 @@ test("an entry that cites material reads as the material's name; blank rows are 
   assert.equal(isBlank({ content: [{ t: "r", v: 9 }], children: [] } as any), false);
   assert.equal(isBlank({ content: [], children: [3] } as any), false);
 });
+
+test("0.7.0-dev tab leftovers: our custom query is found by its view and removed cleanly", async () => {
+  const { tabEntry, withoutTab, isJournal } = await import("../src/v3/model");
+  const view = "orca-footnotes.footer", q = { q: { kind: 100, conditions: [] } };
+  const mine = [{ name: "尾注", q, view: "list" }], ours = { name: "尾注 2", q, view, viewOpts: {} };
+  // Found by its view, even renamed; a user's own query named 尾注 is not ours.
+  assert.equal(tabEntry([...mine, ours], view)?.name, "尾注 2"); assert.equal(tabEntry(mine, view), undefined);
+  // Removed: only ours and its name go; nothing to remove leaves the lists as they were.
+  assert.deepEqual(withoutTab([...mine, ours], ["尾注 2", "_samekind", "尾注"], view), { queries: mine, order: ["_samekind", "尾注"] });
+  assert.deepEqual(withoutTab(mine, ["尾注"], view), { queries: mine, order: ["尾注"] });
+  // Junk in the property is tolerated.
+  assert.equal(tabEntry("x", view), undefined); assert.equal(tabEntry([null, 3, { view }], view), undefined);
+  assert.deepEqual(withoutTab(undefined, null, view), { queries: [], order: [] });
+  // Journals are recognized by their repr.
+  assert.equal(isJournal({ properties: [{ name: "_repr", type: 0, value: { type: "journal", date: new Date() } }] } as any), true);
+  assert.equal(isJournal({ properties: [] } as any), false);
+});

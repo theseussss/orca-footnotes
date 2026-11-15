@@ -101,3 +101,20 @@ export function citationFragments(text: string): ContentFragment[] {
 export function isBlank(block: Pick<Block, "content" | "children"> | undefined): boolean {
   return !!block && !(block.children?.length) && (block.content ?? []).every(fragment => fragment.t === "t" && !String(fragment.v ?? "").trim());
 }
+// ---------- 0.7.0-dev's tab, kept only to take it off again ----------
+/** 0.7.0-dev showed the footer as an Orca custom query (in a page's `_queries`;
+ * journals: one shared list in Orca's settings). The tab is now drawn by the
+ * plugin; these find and remove such leftovers. */
+export const JOURNAL_QUERIES = 1004, JOURNAL_QUERY_ORDER = 1005;
+export interface TabQuery { readonly name: string; readonly q: unknown; readonly view: string; readonly viewOpts?: unknown }
+export function isJournal(block: Pick<Block, "properties"> | undefined): boolean { return reprType(block) === "journal"; }
+/** Our entry in a list of custom queries (found by its view, not its name). */
+export function tabEntry(queries: unknown, viewId: string): TabQuery | undefined {
+  return Array.isArray(queries) ? queries.find((query): query is TabQuery => !!query && typeof query === "object" && query.view === viewId && typeof query.name === "string") : undefined;
+}
+/** The custom queries without ours, and the order without its name. */
+export function withoutTab(queries: unknown, order: unknown, viewId: string): { queries: TabQuery[]; order: string[] } {
+  const list: TabQuery[] = Array.isArray(queries) ? queries.filter(query => query && typeof query === "object") : [];
+  const ours = tabEntry(list, viewId), names = Array.isArray(order) ? order.filter((name): name is string => typeof name === "string") : [];
+  return ours ? { queries: list.filter(query => query !== ours), order: names.filter(name => name !== ours.name) } : { queries: list, order: names };
+}

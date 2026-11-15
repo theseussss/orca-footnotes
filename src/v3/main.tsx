@@ -5,13 +5,20 @@ import { SECTION_REPR, normalizeShortcut } from "./model";
 import workspaceCss from "../vnext/workspace.css";
 import referenceCss from "../vnext/native-reference.css";
 import v3Css from "./v3.css";
+import drawerCss from "./drawer.css";
 
-export const version = "0.6.1";
+export const version = "0.7.0";
 const SETTINGS: PluginSettingsSchema = {
   tagName: { label: "尾注标签名", type: "string", defaultValue: "尾注" },
   footerTitle: { label: "尾注区标题", type: "string", defaultValue: "尾注" },
-  footerStyle: { label: "尾注区样式", type: "singleChoice", defaultValue: "rule", choices: [{ label: "分隔线", value: "rule" }, { label: "标题", value: "heading" }] },
+  footerPlacement: { label: "尾注区位置", description: "引用栏：每一页底部都有一个“尾注”标签，和“引用”“同标签”排在一起（插件画在界面上，不写进笔记）。", type: "singleChoice", defaultValue: "tab", choices: [{ label: "引用栏里的标签", value: "tab" }, { label: "正文末尾", value: "body" }] },
+  tabPosition: { label: "尾注标签排第几个", description: "1 为最前（打开页面就显示尾注），0 为最后。也可以直接在标签栏里拖动“尾注”标签。", type: "number", defaultValue: 1 },
+  footerStyle: { label: "尾注区样式（正文末尾时）", type: "singleChoice", defaultValue: "rule", choices: [{ label: "分隔线", value: "rule" }, { label: "标题", value: "heading" }] },
   navigatorVisible: { label: "默认显示尾注目录", type: "boolean", defaultValue: true },
+  directoryStyle: { label: "目录样式", type: "singleChoice", defaultValue: "drawer", choices: [{ label: "抽屉（贴在右边，靠近时浮出）", value: "drawer" }, { label: "列表（浮窗）", value: "list" }] },
+  drawerMode: { label: "抽屉动法", type: "singleChoice", defaultValue: "local", choices: [{ label: "局部浮出：只浮出焦点附近几条", value: "local" }, { label: "整条滑出：全部露出，焦点附近再放大", value: "slide" }] },
+  drawerFollow: { label: "抽屉浮动跟随", type: "singleChoice", defaultValue: "pointer", choices: [{ label: "鼠标位置", value: "pointer" }, { label: "阅读位置＋鼠标", value: "reading" }] },
+  drawerFont: { label: "抽屉字体", type: "singleChoice", defaultValue: "editor", choices: [{ label: "跟随正文字体", value: "editor" }, { label: "西文衬线（Georgia）＋正文字体", value: "serif" }, { label: "无衬线（苹方；没有时用系统字体）", value: "sans" }] },
   directoryClick: { label: "点击目录", type: "singleChoice", defaultValue: "body", choices: [{ label: "正文引用", value: "body" }, { label: "文末尾注", value: "footer" }] },
   referenceClick: { label: "点击上标", type: "singleChoice", defaultValue: "jump", choices: [{ label: "跳到文末尾注", value: "jump" }, { label: "编辑尾注内容", value: "edit" }] },
   insertShortcut: { label: "添加尾注的快捷键", description: "如 alt+ctrl+f、alt+shift+n；留空表示不用快捷键。和别的命令冲突时不改动。", type: "string", defaultValue: "alt+ctrl+f" },
@@ -33,7 +40,7 @@ export async function load(name: string): Promise<void> {
   (globalThis as any).__ofnV3 = rt; cleanup.push(() => { if ((globalThis as any).__ofnV3 === rt) delete (globalThis as any).__ofnV3; });
   try {
     const style = document.createElement("style"); style.dataset.ofnV3 = version;
-    style.textContent = `${workspaceCss}\n${referenceCss}\n${v3Css}\n.ofn-next-entry{display:inline-flex;align-items:center;justify-content:center;inline-size:28px;block-size:28px;padding:4px;line-height:1;box-sizing:border-box}`;
+    style.textContent = `${workspaceCss}\n${referenceCss}\n${v3Css}\n${drawerCss}\n.ofn-next-entry{display:inline-flex;align-items:center;justify-content:center;inline-size:28px;block-size:28px;padding:4px;line-height:1;box-sizing:border-box}`;
     document.head.append(style); cleanup.push(() => style.remove());
     const React = window.React as unknown as typeof import("react"), { Button } = api.components;
     api.renderers.registerBlock(SECTION_REPR, false, createSectionRenderer(React, api, rt)); cleanup.push(() => api.renderers.unregisterBlock(SECTION_REPR));

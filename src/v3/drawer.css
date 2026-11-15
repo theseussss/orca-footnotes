@@ -1,0 +1,35 @@
+/* Drawer directory: lines on the editor's right edge; nearby entries spring out. No box, border or panel. */
+.ofn-v3-drawer { position: fixed; z-index: 98; pointer-events: none; /* Footnote text is part of the writing: the note's own typeface (Orca's editor font), light and a little open. */ font-family: var(--orca-fontfamily-editor, var(--orca-fontfamily-ui, serif)); font-size: 13.5px; font-weight: 400; letter-spacing: .02em; color: color-mix(in srgb, var(--orca-color-text-1, currentColor) 84%, transparent); text-autospace: normal; text-spacing-trim: trim-start; font-kerning: normal; }
+.ofn-v3-drawer-strip { position: absolute; right: 0; inline-size: 28px; pointer-events: auto; }
+.ofn-v3-drawer-row { position: absolute; right: 0; inline-size: 0; pointer-events: none; }
+.ofn-v3-drawer-hit { position: absolute; right: 0; top: 0; inline-size: 28px; block-size: 100%; display: flex; align-items: center; justify-content: flex-end; margin: 0; padding: 0; border: 0; background: none; cursor: pointer; pointer-events: auto; }
+.ofn-v3-drawer-line { display: block; flex: none; inline-size: 12px; block-size: 2px; border-radius: 1px; background: var(--orca-color-text-2, currentColor); opacity: .35; transform-origin: right center; will-change: transform; transition: opacity .12s, background-color .12s; pointer-events: auto; }
+.ofn-v3-drawer-row.is-lit .ofn-v3-drawer-line { opacity: .7; }
+.ofn-v3-drawer-row.is-selected .ofn-v3-drawer-line { background: var(--orca-color-primary-5, currentColor); opacity: 1; }
+.ofn-v3-drawer-hit:focus-visible { outline: none; }
+.ofn-v3-drawer-hit:focus-visible .ofn-v3-drawer-line { outline: 1px solid var(--orca-color-primary-5, currentColor); outline-offset: 2px; }
+/* Sized by its content: the row is 0 wide, so shrink-to-fit would squeeze wrapped text to one character per line. */
+.ofn-v3-drawer-mover { position: absolute; right: 0; top: 50%; inline-size: max-content; display: flex; align-items: center; pointer-events: none; will-change: transform; transform: translate3d(0, -50%, 0); }
+.ofn-v3-drawer-pad { flex: none; inline-size: 12px; }
+.ofn-v3-drawer-label { display: flex; align-items: baseline; gap: 6px; min-inline-size: 0; max-inline-size: 16rem; margin: 0; padding: 2px 8px 2px 8px; border: 0; border-radius: 8px; background: none; color: var(--orca-color-text-1, inherit); font: inherit; text-align: left; cursor: pointer; opacity: var(--o, 0); pointer-events: auto; transition: background-color .12s, padding .12s; }
+/* Numbers: small, light and muted, same width each. */
+.ofn-v3-drawer-label > b { flex: none; font-weight: 400; font-size: .86em; font-variant-numeric: tabular-nums lining-nums; color: var(--orca-color-text-2, inherit); opacity: .8; }
+.ofn-v3-drawer-label > span { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ofn-v3-drawer-label.is-num { font-size: var(--orca-fontsize-xs, 12px); }
+.ofn-v3-drawer-label.is-full { align-items: flex-start; max-inline-size: 18rem; padding: 8px 12px; background: color-mix(in srgb, var(--orca-color-bg-1, Canvas) 72%, transparent); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); box-shadow: 0 1px 10px rgb(0 0 0 / .05); }
+.ofn-v3-drawer-label.is-full { font-size: 14px; }
+.ofn-v3-drawer-label.is-full > span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 6; line-height: 1.7; white-space: normal; overflow-wrap: anywhere; }
+.ofn-v3-drawer-more { flex: none; margin-inline: 2px 0; opacity: var(--o, 1); pointer-events: auto; }
+.ofn-v3-drawer-empty { position: absolute; right: 0; inline-size: 28px; display: flex; justify-content: flex-end; pointer-events: none; }
+.ofn-v3-drawer-empty > i { display: block; inline-size: 12px; block-size: 2px; border-radius: 1px; background: var(--orca-color-text-2, currentColor); opacity: .2; }
+/* 抽屉字体 = 西文衬线: Latin and digits in Georgia (old-style figures), Chinese in the note's typeface. */
+.ofn-v3-drawer[data-font="serif"] { font-family: Georgia, "Times New Roman", var(--orca-fontfamily-editor, serif), serif; letter-spacing: .015em; }
+.ofn-v3-drawer[data-font="serif"] .ofn-v3-drawer-label > b { font-family: Georgia, serif; font-size: .92em; opacity: .85; font-variant-numeric: oldstyle-nums proportional-nums; }
+/* 抽屉字体 = 无衬线: PingFang where a theme or the system has it, else the system UI font. */
+.ofn-v3-drawer[data-font="sans"] { font-family: "PingFang SC", "Segoe UI Variable Text", "Segoe UI", var(--orca-fontfamily-ui, sans-serif), sans-serif; font-size: 13px; letter-spacing: .01em; color: color-mix(in srgb, var(--orca-color-text-1, currentColor) 82%, transparent); }
+.ofn-v3-drawer[data-font="sans"] .ofn-v3-drawer-label > b { font-weight: 500; font-size: .85em; opacity: .75; }
+.ofn-v3-drawer[data-font="sans"] .ofn-v3-drawer-label.is-full { font-size: 13.5px; }
+.ofn-v3-drawer[data-font="sans"] .ofn-v3-drawer-label.is-full > span { line-height: 1.65; }
+@media (prefers-reduced-motion: reduce) {
+  .ofn-v3-drawer *, .ofn-v3-drawer *::before { transition: none !important; }
+}

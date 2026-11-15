@@ -4,7 +4,7 @@
 //   OFN_TEST_REPO=<repo> node tests/real-orca/cdp-v31.mjs
 import { chromium } from "playwright";
 const expectedRepo = process.env.OFN_TEST_REPO; if (!expectedRepo) throw new Error("Set OFN_TEST_REPO.");
-const browser = await chromium.connectOverCDP("http://127.0.0.1:9222");
+const browser = await chromium.connectOverCDP(process.env.OFN_CDP ?? "http://127.0.0.1:9222");
 let page; for (const c of browser.contexts().flatMap(x => x.pages())) if (await c.evaluate(() => typeof window.orca === "object").catch(() => false)) { page = c; break; }
 if ((await page.evaluate(() => orca.state.repo)) !== expectedRepo) { await browser.close(); throw new Error("Not the test library."); }
 const logs = []; page.on("console", m => { if (["error", "warning"].includes(m.type())) logs.push(`${m.type()}: ${m.text().slice(0, 300)}`); });
@@ -30,11 +30,13 @@ const state = root => page.evaluate(({ root, ids }) => {
   const b = x => orca.state.blocks[x], rep = x => b(x)?.properties?.find(p => p.name === "_repr")?.value;
   const section = (b(root)?.children ?? []).map(b).find(x => rep(x?.id)?.type === "orca-footnotes.section");
   const editor = [...document.querySelectorAll(".orca-block-editor[data-block-id]")].find(e => e.dataset.blockId === String(root) && !e.closest(".orca-hideable-hidden"));
-  const own = editor?.querySelector(`.orca-block[data-id="${section?.id}"]`);
+  // v0.7: the footer may be drawn in the 尾注 tab; the body then keeps an empty shell.
+  const own = editor?.querySelector(`.ofn-v3-tab .orca-block[data-id="${section?.id}"]`) ?? editor?.querySelector(`.orca-block[data-id="${section?.id}"]`);
   return { section: section ? section.children.map(c => ({ c, mirrorOf: rep(c)?.mirroredId ?? null, text: (b(rep(c)?.mirroredId ?? c)?.text ?? "").trim() })) : null,
     sups: editor ? [...editor.querySelectorAll(".orca-inline.ofn-vnext-note")].filter(n => !n.closest('[data-ofn-foreign="true"]')).map(n => n.querySelector(".orca-inline-r-content")?.getAttribute("data-ofn-number")) : null,
     rows: own ? [...own.querySelectorAll(":scope > .orca-repr > .orca-repr-children > .orca-block")].map(r => `${r.querySelector(".orca-block-handle")?.getAttribute("data-icon") ?? "·"} ${(r.querySelector(".orca-repr-main-content")?.textContent ?? "").slice(0, 12)}`) : null,
-    foreign: editor ? [...editor.querySelectorAll('[data-ofn-foreign="true"]')].map(n => n.dataset.id) : null };
+    foreign: editor ? [...editor.querySelectorAll('[data-ofn-foreign="true"]')].map(n => n.dataset.id) : null,
+    shown: own ? own.getClientRects().length > 0 : null };
 }, { root, ids });
 const storePage = () => page.evaluate(async () => { const f = await orca.invokeBackend("get-blockid-by-alias", "尾注库"); const id = typeof f === "number" ? f : f?.id; const s = orca.state.blocks[id] ?? await orca.invokeBackend("get-block", id); return s ? { id: s.id, children: s.children.length } : null; });
 await go(ids.page);

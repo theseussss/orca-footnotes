@@ -49,3 +49,16 @@
 .ofn-v3-section-note { margin-inline-start: 8px; color: var(--orca-color-text-2, inherit); font-size: var(--orca-fontsize-xs, 12px); }
 /* The delete box keeps Orca's ConfirmBox look; only its width is bounded. */
 .ofn-v3-confirm { max-inline-size: min(26rem, calc(100vw - 24px)); }
+/* The 尾注 tab, drawn by the plugin into Orca's bottom tab bar; its panel sits
+   after Orca's views and replaces them while ours is chosen. */
+.ofn-v3-tab-panel { display: none; padding-block-start: var(--orca-spacing-sm, 4px); }
+[data-ofn-tab="on"] > .ofn-v3-tab-panel { display: block; }
+[data-ofn-tab="on"] > .orca-block-editor-query-views { display: none !important; }
+/* Some themes fade the tab bar when the first tab has nothing to show; ours does. */
+[data-ofn-tab="on"] > .orca-block-editor-query-tabs-container { opacity: 1 !important; }
+.ofn-v3-tab { user-select: text; }
+.ofn-v3-tab-note { padding: 8px 4px; color: var(--orca-color-text-2, inherit); font-size: var(--orca-fontsize-sm, 13px); user-select: none; }
+.ofn-v3-tab-panel:has(> .ofn-v3-tab > *) > .ofn-v3-tab-note { display: none; }
+.ofn-v3-section-fill { flex: 1 1 auto; }
+/* In the tab the label names the footer; the footer block's own bullet would stand alone. */
+.ofn-v3-tab > .orca-block > .orca-repr > .orca-repr-main > .orca-repr-main-none-editable > .orca-block-handle { visibility: hidden; }
